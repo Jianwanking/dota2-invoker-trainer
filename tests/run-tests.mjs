@@ -11,6 +11,7 @@ import {
   invokeSpell,
   makeKeyBindings,
   pushOrb,
+  randomSpellTargets,
   refreshCooldowns,
   setBindingAtPath,
   spellFromOrbs
@@ -218,6 +219,22 @@ test("random mode timer starts after first valid key", () => {
   assert.equal(session.comboTimer.startedAt, null);
   session = press(session, "KeyQ", 120);
   assert.equal(session.comboTimer.startedAt, 120);
+});
+
+test("random spell targets never place the same spell back-to-back", () => {
+  const originalRandom = Math.random;
+  const rolls = [0.01, 0.01, 0.21, 0.21, 0.41, 0.41, 0.61, 0.61, 0.81, 0.81];
+  let index = 0;
+  Math.random = () => rolls[index++ % rolls.length];
+
+  try {
+    const targets = randomSpellTargets(10);
+    for (let i = 1; i < targets.length; i += 1) {
+      assert.notEqual(targets[i].id, targets[i - 1].id);
+    }
+  } finally {
+    Math.random = originalRandom;
+  }
 });
 
 test("real mode blocks repeated spell casts until cooldown expires", () => {

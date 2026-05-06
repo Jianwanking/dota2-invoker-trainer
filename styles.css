@@ -244,17 +244,17 @@ kbd {
   display: grid;
   align-items: center;
   flex: 1 1 auto;
-  min-height: clamp(220px, 34vh, 430px);
-  margin: clamp(16px, 2.8vh, 36px) -48px 12px;
+  min-height: clamp(198px, 31vh, 380px);
+  margin: clamp(8px, 1.8vh, 18px) -36px 8px;
   overflow: hidden;
 }
 
 .skill-rail {
   display: flex;
-  gap: 22px;
+  gap: 18px;
   align-items: center;
   padding: 0 50%;
-  transform: translateX(calc(-1 * var(--rail-shift, 92px)));
+  transform: translateX(calc(-1 * var(--rail-shift, 84px)));
   transition: transform 340ms cubic-bezier(.2, .75, .2, 1);
 }
 
@@ -328,11 +328,11 @@ kbd {
 
 .rail-card {
   position: relative;
-  flex: 0 0 184px;
-  min-height: 198px;
+  flex: 0 0 168px;
+  min-height: 180px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 24px;
-  padding: 16px;
+  border-radius: 22px;
+  padding: 14px;
   opacity: 0.48;
   background: rgba(7, 12, 16, 0.74);
   filter: saturate(0.65);
@@ -341,18 +341,18 @@ kbd {
 
 .rail-card.past {
   opacity: 0.34;
-  transform: translateX(-10px) scale(0.9);
+  transform: translateX(-8px) scale(0.9);
 }
 
 .rail-card.future {
   opacity: 0.34;
-  transform: translateX(10px) scale(0.94);
+  transform: translateX(8px) scale(0.94);
 }
 
 .rail-card.active {
   border-color: rgba(244, 216, 137, 0.68);
   opacity: 1;
-  transform: scale(1.08);
+  transform: scale(1.05);
   filter: saturate(1.2);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.38);
 }
@@ -367,10 +367,10 @@ kbd {
 
 .rail-card img {
   display: block;
-  width: 92px;
-  height: 92px;
-  margin-bottom: 18px;
-  border-radius: 18px;
+  width: 80px;
+  height: 80px;
+  margin-bottom: 14px;
+  border-radius: 16px;
   object-fit: cover;
 }
 
@@ -406,11 +406,13 @@ kbd {
 
 .rail-card span {
   font-weight: 900;
+  font-size: 0.96rem;
 }
 
 .rail-card small {
   margin-top: 0.2rem;
   color: var(--muted);
+  font-size: 0.72rem;
 }
 
 .center-target {
@@ -419,7 +421,13 @@ kbd {
 
 .status-line {
   min-height: 1.7rem;
-  margin: 0 0 18px;
+  width: fit-content;
+  max-width: min(680px, 100%);
+  margin: 8px auto 4px;
+  border: 1px solid rgba(244, 216, 137, 0.16);
+  border-radius: 999px;
+  padding: 0.48rem 1rem;
+  background: rgba(4, 8, 12, 0.32);
   color: var(--gold-bright);
   text-align: center;
 }
@@ -1319,11 +1327,12 @@ body[data-flash="bad"] .status-line {
   }
 
   .rail-card {
-    flex-basis: 138px;
+    flex-basis: 130px;
+    min-height: 150px;
   }
 
   .skill-rail {
-    transform: translateX(-96px);
+    transform: translateX(-83px);
   }
 
   .combo-steps li {
@@ -1359,8 +1368,8 @@ body[data-flash="bad"] .status-line {
   }
 
   .rail-wrap {
-    min-height: clamp(170px, 24vh, 280px);
-    margin-top: 12px;
+    min-height: clamp(162px, 23vh, 268px);
+    margin-top: 8px;
     margin-bottom: 8px;
   }
 
@@ -1375,7 +1384,7 @@ body[data-flash="bad"] .status-line {
   }
 
   .status-line {
-    margin-bottom: 12px;
+    margin-top: 6px;
   }
 }
 
@@ -1405,8 +1414,8 @@ body[data-flash="bad"] .status-line {
   }
 
   .rail-wrap {
-    min-height: clamp(156px, 22vh, 248px);
-    margin-top: 10px;
+    min-height: clamp(148px, 21vh, 236px);
+    margin-top: 8px;
     margin-bottom: 6px;
   }
 
@@ -1421,7 +1430,7 @@ body[data-flash="bad"] .status-line {
   }
 
   .status-line {
-    margin-bottom: 10px;
+    margin-top: 4px;
   }
 
   .hud section {

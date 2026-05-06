@@ -1,8 +1,8 @@
 import { INVOKE, ORB_ORDER, ORBS, SPELLS } from "./data/spells.js";
 import { ITEMS } from "./data/items.js";
 
-const RAIL_CARD_WIDTH = 184;
-const RAIL_CARD_GAP = 22;
+const RAIL_CARD_WIDTH = 168;
+const RAIL_CARD_GAP = 18;
 
 const STORAGE_KEYS = {
   combos: "invoker-trainer-combos-v1",
@@ -638,10 +638,25 @@ export function describeStep(step) {
 }
 
 export function randomSpellTargets(count = 24) {
-  return Array.from({ length: count }, () => {
-    const spell = SPELLS[Math.floor(Math.random() * SPELLS.length)];
-    return { type: "spell", id: spell.id };
-  });
+  if (count <= 0 || !SPELLS.length) return [];
+  if (SPELLS.length === 1) {
+    return Array.from({ length: count }, () => ({ type: "spell", id: SPELLS[0].id }));
+  }
+
+  const targets = [];
+  let previousIndex = -1;
+
+  for (let i = 0; i < count; i += 1) {
+    let nextIndex = Math.floor(Math.random() * SPELLS.length);
+    if (nextIndex === previousIndex) {
+      nextIndex = Math.floor(Math.random() * (SPELLS.length - 1));
+      if (nextIndex >= previousIndex) nextIndex += 1;
+    }
+    targets.push({ type: "spell", id: SPELLS[nextIndex].id });
+    previousIndex = nextIndex;
+  }
+
+  return targets;
 }
 
 export function getDefaultCombos() {
