@@ -261,10 +261,12 @@ test("real mode blocks repeated spell casts until cooldown expires", () => {
   outcome = applyPracticeKey(session, "KeyD", 1000);
   assert.equal(outcome.result.ok, false);
   assert.equal(outcome.result.reason, "spell-cooldown");
+  assert.equal(outcome.session.failed, true);
 
   outcome = applyPracticeKey(outcome.session, "KeyD", 28000);
-  assert.equal(outcome.result.targetCompleted, true);
-  assert.equal(outcome.session.currentIndex, 2);
+  assert.equal(outcome.result.ok, false);
+  assert.equal(outcome.result.reason, "combo-failed");
+  assert.equal(outcome.session.currentIndex, 1);
 });
 
 test("real mode blocks repeated item casts until cooldown expires", () => {
@@ -286,9 +288,46 @@ test("real mode blocks repeated item casts until cooldown expires", () => {
   outcome = applyPracticeKey(outcome.session, "Digit1", 1000);
   assert.equal(outcome.result.ok, false);
   assert.equal(outcome.result.reason, "item-cooldown");
+  assert.equal(outcome.session.failed, true);
 
   outcome = applyPracticeKey(outcome.session, "Digit1", 15000);
-  assert.equal(outcome.result.targetCompleted, true);
+  assert.equal(outcome.result.ok, false);
+  assert.equal(outcome.result.reason, "combo-failed");
+});
+
+test("combo mode fails the run after a wrong release and ignores later practice keys", () => {
+  let session = createPracticeSession({
+    keyBindings: makeKeyBindings("modern"),
+    mode: "combo",
+    requireInvokeCast: true,
+    targets: [
+      { type: "spell", id: "cold_snap" },
+      { type: "spell", id: "tornado" }
+    ]
+  });
+
+  session = press(session, "KeyQ", 0);
+  session = press(session, "KeyQ", 50);
+  session = press(session, "KeyQ", 100);
+  session = press(session, "KeyR", 150);
+  session = applyPracticeKey(session, "KeyD", 200).session;
+
+  session = press(session, "KeyE", 250);
+  session = press(session, "KeyE", 300);
+  session = press(session, "KeyE", 350);
+  session = press(session, "KeyR", 400);
+
+  let outcome = applyPracticeKey(session, "KeyD", 450);
+  assert.equal(outcome.result.ok, false);
+  assert.equal(outcome.result.reason, "wrong-spell-cast");
+  assert.equal(outcome.session.failed, true);
+  assert.equal(outcome.session.comboTimer.startedAt, null);
+  assert.equal(outcome.session.comboTimer.lastCompletedMs, 250);
+
+  outcome = applyPracticeKey(outcome.session, "KeyQ", 500);
+  assert.equal(outcome.result.ok, false);
+  assert.equal(outcome.result.reason, "combo-failed");
+  assert.equal(outcome.session.currentIndex, 1);
 });
 
 test("item keys only work for equipped items", () => {

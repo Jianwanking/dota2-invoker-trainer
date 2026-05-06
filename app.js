@@ -291,6 +291,7 @@ export function createPracticeSession({
     recentKeys: [],
     completed: [],
     free: createFreeState(),
+    failed: false,
     streak: 0,
     mistakes: 0,
     lastResult: null
@@ -334,6 +335,7 @@ function completeCurrentTarget(session, result) {
 function markMistake(session, result, reason, options = {}) {
   session.mistakes += 1;
   session.streak = 0;
+  session.pendingSpellId = null;
   result.ok = false;
   result.correct = false;
   result.reason = reason;
@@ -345,6 +347,15 @@ function markMistake(session, result, reason, options = {}) {
       session.currentIndex += 1;
       session.pendingSpellId = null;
       result.targetFailed = true;
+    }
+  }
+
+  if (isComboPracticeMode(session.mode)) {
+    session.failed = true;
+    result.sessionFailed = true;
+    if (session.comboTimer.startedAt !== null) {
+      session.comboTimer.lastCompletedMs = Math.max(0, options.now - session.comboTimer.startedAt);
+      session.comboTimer.startedAt = null;
     }
   }
 }
@@ -527,6 +538,13 @@ export function applyPracticeKey(session, rawCode, now = Date.now()) {
 
   recordKey(next, code);
 
+  if (next.failed && isComboPracticeMode(next.mode)) {
+    result.ok = false;
+    result.reason = "combo-failed";
+    next.lastResult = result;
+    return { session: next, result };
+  }
+
   const target = getCurrentTarget(next);
   const isFree = next.mode === "free";
   if (!target && !isFree) {
@@ -553,18 +571,18 @@ export function applyPracticeKey(session, rawCode, now = Date.now()) {
         completeCurrentTarget(next, result);
       }
     } else if (next.invoker.orbs.length === 3 && !next.requireInvokeCast) {
-      markMistake(next, result, "wrong-orbs");
+      markMistake(next, result, "wrong-orbs", { now });
     }
   } else if (action.kind === "invoke") {
     const recognized = spellFromOrbs(SPELLS, next.invoker.orbs);
     if (!recognized) {
-      markMistake(next, result, "no-spell-to-invoke");
+      markMistake(next, result, "no-spell-to-invoke", { now });
     } else {
       const invoked = invokeSpell(next.invoker, recognized.id, now, {
         ignoreCooldown: !usesRealCooldowns(next.mode)
       });
       if (!invoked.ok) {
-        markMistake(next, result, invoked.reason);
+        markMistake(next, result, invoked.reason, { now });
         result.remainingMs = invoked.remainingMs;
       } else {
         next.invoker = invoked.state;
@@ -575,15 +593,15 @@ export function applyPracticeKey(session, rawCode, now = Date.now()) {
   } else if (action.kind === "cast") {
     const spellId = action.spellId;
     if (!spellId) {
-      markMistake(next, result, "empty-slot", { advanceRandom: true });
+      markMistake(next, result, "empty-slot", { advanceRandom: true, now });
     } else if (!isFree && (target.type !== "spell" || target.id !== spellId)) {
-      markMistake(next, result, "wrong-spell-cast", { advanceRandom: true });
+      markMistake(next, result, "wrong-spell-cast", { advanceRandom: true, now });
     } else {
       const cast = castSpell(next.invoker, getSpell(spellId), action.slot, now, {
         ignoreCooldown: !usesRealCooldowns(next.mode)
       });
       if (!cast.ok) {
-        markMistake(next, result, cast.reason);
+        markMistake(next, result, cast.reason, { now });
         result.remainingMs = cast.remainingMs;
       } else {
         next.invoker = cast.state;
@@ -598,16 +616,16 @@ export function applyPracticeKey(session, rawCode, now = Date.now()) {
       }
     }
   } else if (action.kind === "inactive-spell-key") {
-    markMistake(next, result, "spell-not-in-slot");
+    markMistake(next, result, "spell-not-in-slot", { now });
   } else if (action.kind === "item") {
     if (!isFree && (target.type !== "item" || target.id !== action.id)) {
-      markMistake(next, result, "wrong-item", { advanceRandom: true });
+      markMistake(next, result, "wrong-item", { advanceRandom: true, now });
     } else {
       const cast = castItem(next.invoker, getItem(action.id), now, {
         ignoreCooldown: !usesRealCooldowns(next.mode)
       });
       if (!cast.ok) {
-        markMistake(next, result, cast.reason);
+        markMistake(next, result, cast.reason, { now });
         result.remainingMs = cast.remainingMs;
       } else {
         next.invoker = cast.state;
@@ -622,8 +640,12 @@ export function applyPracticeKey(session, rawCode, now = Date.now()) {
       }
     }
   } else {
-    result.ok = false;
-    result.reason = "unmapped-key";
+    if (isComboPracticeMode(next.mode)) {
+      markMistake(next, result, "unmapped-key", { now });
+    } else {
+      result.ok = false;
+      result.reason = "unmapped-key";
+    }
   }
 
   updateSessionTimer(next, result, action.kind, now, previousIndex);
@@ -709,6 +731,7 @@ function collectElements() {
     sessionTimer: document.querySelector("#session-timer"),
     sessionComboNav: document.querySelector("#session-combo-nav"),
     sessionComboName: document.querySelector("#session-combo-name"),
+    sessionRestart: document.querySelector("#session-restart-combo"),
     orbs: document.querySelector("#orb-row"),
     slots: document.querySelector("#slot-row"),
     cooldowns: document.querySelector("#cooldown-row"),
@@ -843,6 +866,11 @@ function bindUi(app, elements) {
     });
   });
 
+  elements.sessionRestart?.addEventListener("click", () => {
+    resetSession(app);
+    render(app, elements);
+  });
+
   elements.newCombo.addEventListener("click", () => {
     const combo = { id: `custom-${Date.now()}`, name: "新的连招", steps: [] };
     app.combos.push(combo);
@@ -928,7 +956,12 @@ function bindUi(app, elements) {
 
     if (event.code === "Enter" && isComboPracticeMode(app.settings.mode)) {
       event.preventDefault();
-      selectComboByOffset(app, elements, event.shiftKey ? -1 : 1);
+      if (event.shiftKey) {
+        selectComboByOffset(app, elements, 1);
+      } else {
+        resetSession(app);
+        render(app, elements);
+      }
       return;
     }
 
@@ -993,9 +1026,9 @@ function renderMode(app, elements) {
   elements.modeSubtitle.textContent = app.settings.mode === "random"
     ? "滚动随机技能，放大的目标是当前要搓的招。"
     : app.settings.mode === "combo"
-      ? "练固定连招，不考虑 CD；Enter 下一套，Shift + Enter 上一套。"
+      ? "练固定连招；按错就判失败。Enter 重打当前，Shift + Enter 切下一套。"
       : app.settings.mode === "real"
-        ? "技能槽、Invoke、技能和物品 CD 都按真实节奏走；Enter 切连招。"
+        ? "技能槽、Invoke、技能和物品 CD 都按真实节奏走；按错就失败。Enter 重打当前，Shift + Enter 下一套。"
         : "不设定目标，随便按；5 秒内算同一段连招。点“结束统计”结算总时间和平均时间。";
   elements.endFreeRun.hidden = app.settings.mode !== "free";
 }
@@ -1045,8 +1078,10 @@ function renderRail(app, elements) {
   renderSessionComboNav(app, elements);
 
   const last = app.session.lastResult;
-  elements.status.textContent = comboMode && !getCurrentTarget(app.session)
-    ? "连招完成。按 Enter 下一套，Shift + Enter 上一套。"
+  elements.status.textContent = comboMode && app.session.failed
+    ? "这套失败了。按 Enter 重打当前连招，Shift + Enter 切下一套。"
+    : comboMode && !getCurrentTarget(app.session)
+    ? "这套打完了。按 Enter 重打当前连招，Shift + Enter 切下一套。"
     : last
     ? statusText(last)
     : "敲键开始。放大的图标就是当前目标，小手别慌。";
@@ -1130,6 +1165,13 @@ function renderSessionTimer(app, elements) {
       ? null
       : Math.max(0, now - app.session.comboTimer.startedAt);
     const totalMs = runningMs ?? app.session.comboTimer.lastCompletedMs;
+    const stateLabel = app.session.failed
+      ? "失败"
+      : runningMs !== null
+        ? "进行中"
+        : totalMs !== null && !getCurrentTarget(app.session)
+          ? "已完成"
+          : "等待开始";
     panel.hidden = false;
     panel.innerHTML = `
       <span class="timer-title">连招计时</span>
@@ -1139,7 +1181,7 @@ function renderSessionTimer(app, elements) {
       </div>
       <div class="timer-metric">
         <span>状态</span>
-        <strong>${runningMs !== null ? "进行中" : totalMs !== null ? "已完成" : "等待开始"}</strong>
+        <strong>${stateLabel}</strong>
       </div>
     `;
     return;
@@ -1400,6 +1442,7 @@ function formatDuration(ms) {
 
 function statusText(result) {
   if (result.targetCompleted) return "正确，下一招。";
+  if (result.sessionFailed || result.reason === "combo-failed") return "这套已经失败了。按 Enter 重打，Shift + Enter 下一套。";
   if (result.freeStepRecorded) return "已记入当前自由连招，5 秒内继续接。";
   if (result.action === "free-end") return "自由模式统计已结算。";
   if (result.action === "manual-refresh") return "已刷新全部技能和物品 CD。";
